@@ -14,10 +14,27 @@ type errOutput struct {
 	Args    map[string]interface{} `json:"details"`
 }
 
+const DefaultGenericError = `Internal Server Error!`
+
+// Middleware is a handler container for the middleware.
+type Middleware struct {
+	// Debug controls if a call stack should be printed with every error.
+	// Defaults to false.
+	Debug bool
+
+	// GenericError is a string that is shown on error code 500 or
+	// non-merry errors.
+	GenericError string
+}
+
+// New returns new middleware container with default options.
+// If parameter is true then debug mode is assumed.
+func New(debug bool) *Middleware {
+	return &Middleware{Debug:debug,GenericError:DefaultGenericError}
+}
+
 // Handler returns the middleware func.
-// Argument is a generic error string that is displayed
-// if the error is internal (code 500 or not merry).
-func Handler(generr string) gin.HandlerFunc {
+func (m *Middleware) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// before request
 		c.Next()
@@ -31,7 +48,7 @@ func Handler(generr string) gin.HandlerFunc {
 
 		// Hide error 500
 		if merry.HTTPCode(err) == 500 {
-			c.JSON(500, errOutput{Message: generr})
+			c.JSON(500, errOutput{Message: m.GenericError})
 			return
 		}
 
@@ -48,6 +65,10 @@ func Handler(generr string) gin.HandlerFunc {
 			if key, ok := key.(string); ok {
 				out.Args[key] = val
 			}
+		}
+
+		if m.Debug {
+			out.Args[`stack`] = merry.Stacktrace(err)
 		}
 
 		c.JSON(merry.HTTPCode(err), out)
