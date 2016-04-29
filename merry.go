@@ -25,6 +25,9 @@ type Middleware struct {
 	// GenericError is a string that is shown on error code 500 or
 	// non-merry errors.
 	GenericError string
+
+	// LogFunc is the function that gets called each time an error is occurred.
+	LogFunc func(err string,code int, vals map[string]interface{})
 }
 
 // New returns new middleware container with default options.
@@ -44,19 +47,12 @@ func (m *Middleware) Handler() gin.HandlerFunc {
 			return
 		}
 
+		// Get last error, clear all errors
 		err := c.Errors.Last().Err
+		c.Errors = c.Errors[:0]
 
-		// Hide error 500
-		if merry.HTTPCode(err) == 500 {
-			c.JSON(500, errOutput{Message: m.GenericError})
-			return
-		}
-
-		// Should always succeed; merry.HTTPCode always returns 500 for
-		// non-merry
-		err = err.(merry.Error)
-
-		// Form the output
+		// Form the output dict
+		// Only takes stuff that has string as a key.
 		out := errOutput{Message: err.Error(), Args: map[string]interface{}{}}
 		for key, val := range merry.Values(err) {
 			if key == "message" || key == "http status code" {
@@ -67,12 +63,24 @@ func (m *Middleware) Handler() gin.HandlerFunc {
 			}
 		}
 
+		// Add the error's stack if Debug is enabled
 		if m.Debug {
 			out.Args[`stack`] = merry.Stacktrace(err)
 		}
 
+		errCode := merry.HTTPCode(err)
+		// Log the error
+		if m.LogFunc != nil {
+			m.LogFunc(err.Error(),errCode,out.Args)
+		}
+
+		// Hide error 500
+		if merry.HTTPCode(err) == 500 {
+			out.Message = m.GenericError
+			out.Args = nil
+			return
+		}
+
 		c.JSON(merry.HTTPCode(err), out)
-		// Clear errors, unclutter logs
-		c.Errors = c.Errors[:0]
 	}
 }
