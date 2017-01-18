@@ -5,7 +5,7 @@ package ginMerry
 
 import (
 	"github.com/ansel1/merry"
-	"github.com/gin-gonic/gin"
+	"gopkg.in/gin-gonic/gin.v1"
 )
 
 // errOutput is a model for the error display.
